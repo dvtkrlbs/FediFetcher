@@ -12,6 +12,7 @@ import requests
 import time
 import argparse
 import uuid
+import git
 
 argparser=argparse.ArgumentParser()
 
@@ -795,12 +796,30 @@ def get_paginated_mastodon(url, max, headers = {}, timeout = 0, max_tries = 5):
     if(isinstance(max, int)):
         while len(result) < max and 'next' in response.links:
             response = get(response.links['next']['url'], headers, timeout, max_tries)
-            result = result + response.json()
+            if response.status_code != 200:
+                raise Exception(
+                    f"Error getting URL {response.url}. \
+                        Status code: {response.status_code}"
+                )
+            response_json = response.json()
+            if isinstance(response_json, list):
+                result += response_json
+            else:
+                break
     else:
-        while parser.parse(result[-1]['created_at']) >= max and 'next' in response.links:
+        while result and parser.parse(result[-1]['created_at']) >= max \
+            and 'next' in response.links:
             response = get(response.links['next']['url'], headers, timeout, max_tries)
-            result = result + response.json()
-    
+            if response.status_code != 200:
+                raise Exception(
+                    f"Error getting URL {response.url}. \
+                        Status code: {response.status_code}"
+                )
+            response_json = response.json()
+            if isinstance(response_json, list):
+                result += response_json
+            else:
+                break
     return result
 
 
@@ -877,7 +896,16 @@ class OrderedSet:
 if __name__ == "__main__":
     start = datetime.now()
 
-    log(f"Starting FediFetcher")
+    repo = git.Repo(os.getcwd())
+
+    tag = next((tag for tag in repo.tags if tag.commit == repo.head.commit), None)
+
+    if(isinstance(tag, git.TagReference)) :
+        version = tag.name
+    else:
+        version = f"on commit {repo.head.commit.name_rev}"
+
+    log(f"Starting FediFetcher {version}")
 
     arguments = argparser.parse_args()
 
